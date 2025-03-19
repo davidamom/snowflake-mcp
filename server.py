@@ -27,16 +27,57 @@ class SnowflakeConnection:
     Snowflake database connection management class
     """
     def __init__(self):
-        # Initialize configuration from environment variables
+        # Initialize base configuration from environment variables
         self.config = {
             "user": os.getenv("SNOWFLAKE_USER"),
-            "password": os.getenv("SNOWFLAKE_PASSWORD"),
             "account": os.getenv("SNOWFLAKE_ACCOUNT"),
             "database": os.getenv("SNOWFLAKE_DATABASE"),
             "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
         }
+        
+        # Determine authentication method
+        private_key_file = os.getenv("SNOWFLAKE_PRIVATE_KEY_FILE")
+        if private_key_file and os.path.exists(private_key_file):
+            # Key pair authentication
+            self._setup_key_pair_auth(private_key_file)
+            logger.info("Using key pair authentication")
+        else:
+            # Password authentication
+            self.config["password"] = os.getenv("SNOWFLAKE_PASSWORD")
+            logger.info("Using password authentication")
+            
         self.conn: Optional[snowflake.connector.SnowflakeConnection] = None
-        logger.info(f"Initialized with config (excluding password): {json.dumps({k:v for k,v in self.config.items() if k != 'password'})}")
+        
+        # Log config (excluding sensitive info)
+        safe_config = {k: v for k, v in self.config.items() 
+                      if k not in ['password', 'private_key', 'private_key_passphrase']}
+        logger.info(f"Initialized with config: {json.dumps(safe_config)}")
+    
+    def _setup_key_pair_auth(self, private_key_file: str):
+        """
+        Set up key pair authentication
+        
+        Args:
+            private_key_file (str): Path to private key file
+        """
+        try:
+            # Read private key file
+            with open(private_key_file, "rb") as key_file:
+                private_key = key_file.read()
+                
+            # Add to config
+            self.config["private_key"] = private_key
+            
+            # Add passphrase if provided
+            passphrase = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE")
+            if passphrase:
+                self.config["private_key_passphrase"] = passphrase
+                
+        except Exception as e:
+            logger.error(f"Error setting up key pair authentication: {str(e)}")
+            # Fall back to password auth if key file can't be read
+            self.config["password"] = os.getenv("SNOWFLAKE_PASSWORD")
+            logger.info("Falling back to password authentication")
     
     def ensure_connection(self) -> snowflake.connector.SnowflakeConnection:
         """

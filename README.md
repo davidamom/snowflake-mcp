@@ -75,12 +75,38 @@ MacOS/Linux:
 Create a `.env` file in the project root directory and add the following configuration:
 
 ```env
-SNOWFLAKE_USER=your_username      # Your username
-SNOWFLAKE_PASSWORD=your_password  # Your password
-SNOWFLAKE_ACCOUNT=YourAccount.Region    # Example: MyOrg.US-WEST-2
-SNOWFLAKE_DATABASE=your_database  # Your database
-SNOWFLAKE_WAREHOUSE=your_warehouse # Your warehouse
+# Snowflake Configuration - Basic Info
+SNOWFLAKE_USER=your_username          # Your Snowflake username
+SNOWFLAKE_ACCOUNT=YourAccount.Region  # Example: MyOrg.US-WEST-2
+SNOWFLAKE_DATABASE=your_database      # Your database
+SNOWFLAKE_WAREHOUSE=your_warehouse    # Your warehouse
+
+# Authentication - Choose one method
 ```
+
+#### Authentication Options
+
+This MCP server supports two authentication methods:
+
+1. **Password Authentication**
+   ```env
+   SNOWFLAKE_PASSWORD=your_password      # Your Snowflake password
+   ```
+
+2. **Key Pair Authentication**
+   ```env
+   SNOWFLAKE_PRIVATE_KEY_FILE=/path/to/rsa_key.p8     # Path to private key file 
+   SNOWFLAKE_PRIVATE_KEY_PASSPHRASE=your_passphrase   # Optional: passphrase if key is encrypted
+   ```
+
+   For key pair authentication, you must first set up key pair authentication with Snowflake:
+   - Generate a key pair and register the public key with Snowflake
+   - Store the private key file securely on your machine
+   - Provide the full path to the private key file in the configuration
+
+   For instructions on setting up key pair authentication, refer to [Snowflake documentation on key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth).
+
+If both authentication methods are configured, the server will prioritize key pair authentication.
 
 ## Connection Management
 
@@ -120,8 +146,4 @@ Note: Manual server startup is not needed for normal use. The Claude Desktop cli
 
 ## License
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-This project is licensed under the [MIT License](LICENSE). See the [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2025 David Amom
+This project is licensed under the MIT License.
