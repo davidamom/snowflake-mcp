@@ -3,6 +3,7 @@
 A Model Context Protocol (MCP) server that provides Claude access to Snowflake databases.
 
 ![GitHub repo](https://img.shields.io/badge/GitHub-snowflake--mcp-blue)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 This server implements the Model Context Protocol to allow Claude to:
 - Execute SQL queries on Snowflake databases
@@ -119,4 +120,8 @@ Note: Manual server startup is not needed for normal use. The Claude Desktop cli
 
 ## License
 
-This project is licensed under the MIT License.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+This project is licensed under the [MIT License](LICENSE). See the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 David Amom
