@@ -32,7 +32,7 @@ The Snowflake-MCP server consists of several key components:
 3. **Query Processor** - Executes SQL queries on Snowflake and processes the results
 4. **Authentication Manager** - Handles different authentication methods (password or private key)
 
-![alt text](<assets/key_components.svg>)
+![alt text](assets/key_components_bright.svg)
 
 ### Communication Flow
 
@@ -44,7 +44,7 @@ The system works through the following communication flow:
 4. Snowflake returns results to the MCP Server
 5. The MCP Server formats and sends the results back to the MCP Client
 
-![alt text](assets/communication_flow_sequence.svg)
+![alt text](assets/communication_flow_sequence_bright.svg)
 
 This architecture allows for seamless integration between AI applications and Snowflake databases while maintaining security and efficient connection management.
 
