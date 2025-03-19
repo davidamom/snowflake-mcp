@@ -12,6 +12,42 @@ This server implements the Model Context Protocol to allow any MCP client to:
 - Perform database operations safely
 - Connect using either password or key pair authentication
 
+## Architecture Overview
+
+### What is MCP (Model Context Protocol)?
+
+MCP is a standard protocol that allows applications to communicate with AI models and external services. It enables AI models to access tools and data sources beyond their training data, expanding their capabilities through a standardized communication interface. Key features include:
+
+- Based on stdio communication (standard input/output)
+- Structured tool definition and discovery
+- Standardized tool call mechanism
+- Structured results transmission
+
+### System Components
+
+The Snowflake-MCP server consists of several key components:
+
+1. **MCP Server** - Central component that implements the MCP protocol and handles client requests
+2. **Snowflake Connection Manager** - Manages database connections, including creation, maintenance, and cleanup
+3. **Query Processor** - Executes SQL queries on Snowflake and processes the results
+4. **Authentication Manager** - Handles different authentication methods (password or private key)
+
+![alt text](<assets/key components.svg>)
+
+### Communication Flow
+
+The system works through the following communication flow:
+
+1. An MCP Client (such as Claude or other MCP-compatible application) sends a request to the MCP Server
+2. The MCP Server authenticates with Snowflake using credentials from the `.env` file
+3. The MCP Server executes SQL queries on Snowflake
+4. Snowflake returns results to the MCP Server
+5. The MCP Server formats and sends the results back to the MCP Client
+
+![alt text](assets/communication_flow_sequence.svg)
+
+This architecture allows for seamless integration between AI applications and Snowflake databases while maintaining security and efficient connection management.
+
 ## Installation
 
 1. Clone this repository
@@ -146,6 +182,42 @@ Note: Manual server startup is not needed for normal use. The MCP client will ty
 - Automatic connection management
 - Query execution and result processing
 - Compatible with any MCP-compliant client
+
+## Technical Details
+
+### Core Components
+
+The implementation consists of several key classes and modules:
+
+- **server.py** - The main entry point containing the MCP server implementation.
+- **SnowflakeConnection** - Class that handles all Snowflake database operations, including:
+  - Connection establishment and reconnection
+  - Query execution and transaction management
+  - Connection maintenance and cleanup
+- **SnowflakeMCPServer** - The main server class that implements the MCP protocol:
+  - Registers available tools with the MCP framework
+  - Handles tool call requests from clients
+  - Manages the lifecycle of connections
+
+### Connection Lifecycle
+
+The connection lifecycle is carefully managed to ensure reliability:
+
+1. **Initialization** - Connections are created lazily when the first query is received
+2. **Validation** - Connection parameters are validated before attempting to connect
+3. **Monitoring** - Connections are regularly tested for validity
+4. **Recovery** - Automatic reconnection if the connection is lost or times out
+5. **Cleanup** - Proper resource release when the server shuts down
+
+### MCP Tool Interface
+
+The server exposes the following tool to MCP clients:
+
+- **execute_query** - Executes a SQL query on Snowflake and returns the results
+  - Input: SQL query string
+  - Output: Query results in a structured format
+
+This implementation follows best practices for both MCP protocol implementation and Snowflake database interaction.
 
 ## License
 
