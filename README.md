@@ -1,15 +1,16 @@
 # Snowflake MCP Service
 
-A Model Context Protocol (MCP) server that provides Claude access to Snowflake databases.
+A Model Context Protocol (MCP) server that provides access to Snowflake databases for any MCP-compatible client.
 
 ![GitHub repo](https://img.shields.io/badge/GitHub-snowflake--mcp-blue)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-This server implements the Model Context Protocol to allow Claude to:
+This server implements the Model Context Protocol to allow any MCP client to:
 - Execute SQL queries on Snowflake databases
 - Automatically handle database connection lifecycle (connect, reconnect on timeout, close)
 - Handle query results and errors
 - Perform database operations safely
+- Connect using either password or key pair authentication
 
 ## Installation
 
@@ -27,7 +28,7 @@ pip install -r requirements.txt
 
 ### MCP Client Configuration Example
 
-Add the following configuration to `claude_desktop_config.json`:
+Below is an example configuration for Claude Desktop, but this server works with any MCP-compatible client. Each client may have its own configuration method:
 
 ```json
 {
@@ -127,7 +128,7 @@ The server provides automatic connection management features:
 
 ## Usage
 
-The server will start automatically with the Claude Desktop client. No manual startup is required. Once the server is running, Claude will be able to execute Snowflake queries.
+The server will start automatically when configured with your MCP client. No manual startup is required in normal operation. Once the server is running, your MCP client will be able to execute Snowflake queries.
 
 For development testing, you can start the server manually using:
 
@@ -135,15 +136,21 @@ For development testing, you can start the server manually using:
 python server.py
 ```
 
-Note: Manual server startup is not needed for normal use. The Claude Desktop client will automatically manage server startup and shutdown based on the configuration.
+Note: Manual server startup is not needed for normal use. The MCP client will typically manage server startup and shutdown based on the configuration.
 
 ## Features
 
 - Secure Snowflake database access
+- Flexible authentication (password or key pair authentication)
 - Robust error handling and reporting
 - Automatic connection management
 - Query execution and result processing
+- Compatible with any MCP-compliant client
 
 ## License
 
-This project is licensed under the MIT License.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+This project is licensed under the [MIT License](LICENSE). See the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 David Amom
