@@ -32,7 +32,7 @@ The Snowflake-MCP server consists of several key components:
 3. **Query Processor** - Executes SQL queries on Snowflake and processes the results
 4. **Authentication Manager** - Handles different authentication methods (password or private key)
 
-![alt text](<assets/key components.svg>)
+![alt text](<assets/key_components.svg>)
 
 ### Communication Flow
 
