@@ -25,3 +25,6 @@ ENV/
 
 # Logs
 *.log
+
+rsa_key.pub
+rsa_key.p8

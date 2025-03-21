@@ -65,8 +65,27 @@ class SnowflakeConnection:
             with open(private_key_file, "rb") as key_file:
                 private_key = key_file.read()
                 
-            # Add to config
-            self.config["private_key"] = private_key
+            # Try to load the key using snowflake's recommended approach
+            from cryptography.hazmat.backends import default_backend
+            from cryptography.hazmat.primitives.serialization import load_pem_private_key
+            
+            logger.info(f"Attempting to load private key from {private_key_file}")
+            p_key = load_pem_private_key(
+                private_key,
+                password=os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE").encode() if os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE") else None,
+                backend=default_backend()
+            )
+            
+            # Set private key to the properly loaded version
+            from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
+            pkb = p_key.private_bytes(
+                encoding=Encoding.DER,
+                format=PrivateFormat.PKCS8,
+                encryption_algorithm=NoEncryption()
+            )
+            
+            # Add to config (this is what Snowflake expects)
+            self.config["private_key"] = pkb
             
             # Add passphrase if provided
             passphrase = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE")
@@ -75,6 +94,7 @@ class SnowflakeConnection:
                 
         except Exception as e:
             logger.error(f"Error setting up key pair authentication: {str(e)}")
+            logger.error("Details:", exc_info=True)
             # Fall back to password auth if key file can't be read
             self.config["password"] = os.getenv("SNOWFLAKE_PASSWORD")
             logger.info("Falling back to password authentication")
