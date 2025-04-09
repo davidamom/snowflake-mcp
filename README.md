@@ -226,3 +226,75 @@ This implementation follows best practices for both MCP protocol implementation 
 This project is licensed under the [MIT License](LICENSE). See the [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2025 David Amom
+
+## Running with Docker
+
+### Prerequisites
+- Docker installed on your system
+- Docker Compose installed on your system
+- `.env` file configured with your Snowflake credentials
+
+### Option 1: Using Docker Compose (Recommended)
+
+1. **Build and start the container:**
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **View logs:**
+   ```bash
+   docker-compose logs -f
+   ```
+
+3. **Stop the container:**
+   ```bash
+   docker-compose down
+   ```
+
+### Option 2: Using Make Commands
+
+We provide a Makefile with useful commands to manage the Docker container:
+
+- **Build the Docker image:**
+  ```bash
+  make build
+  ```
+
+- **Run the container (interactive mode):**
+  ```bash
+  make run
+  ```
+
+- **Run the container in background:**
+  ```bash
+  make run-detached
+  ```
+
+- **View container logs:**
+  ```bash
+  make logs
+  ```
+
+- **Stop the container:**
+  ```bash
+  make stop
+  ```
+
+- **Stop and remove the container:**
+  ```bash
+  make clean
+  ```
+
+- **Remove everything (container and image):**
+  ```bash
+  make clean-all
+  ```
+
+- **Show all available commands:**
+  ```bash
+  make help
+  ```
+
+### Container Access
+
+The Snowflake MCP Server is accessible on port 8000. If your server is running locally, you can access it at:
