@@ -28,3 +28,4 @@ ENV/
 
 rsa_key.pub
 rsa_key.p8
+_venv

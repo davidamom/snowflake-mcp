@@ -35,37 +35,74 @@ class SnowflakeConnection:
             "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
         }
         
-        # Determine authentication method
-        private_key_file = os.getenv("SNOWFLAKE_PRIVATE_KEY_FILE")
+        # Log authentication configuration start
+        logger.info("=== CONFIGURING AUTHENTICATION ===")
         
-        # Priority 1: Key pair authentication if file is provided and exists
-        if private_key_file and os.path.exists(private_key_file):
-            # Check if using passphrase or not
-            passphrase = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE")
-            if passphrase:
-                logger.info("Using key pair authentication with passphrase")
-            else:
-                logger.info("Using key pair authentication without passphrase")
+        # Check authentication methods available
+        private_key_file = os.getenv("SNOWFLAKE_PRIVATE_KEY_FILE")
+        private_key_passphrase = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE")
+        
+        # Treat empty string passphrase as None
+        if private_key_passphrase == "" or private_key_passphrase is None or (isinstance(private_key_passphrase, str) and private_key_passphrase.strip() == ""):
+            private_key_passphrase = None
+            logger.info("No passphrase provided or empty passphrase detected, treating as None")
+        
+        password = os.getenv("SNOWFLAKE_PASSWORD")
+        
+        # Priority 1: Key pair authentication (always preferred if available)
+        if private_key_file:
+            # First, check if the file exists
+            if not os.path.exists(private_key_file):
+                logger.error(f"Private key file does not exist: {private_key_file}")
+                logger.info("Will try password authentication instead")
                 
-            # Try to setup key pair authentication
-            auth_success = self._setup_key_pair_auth(private_key_file, passphrase)
-            
-            # If key pair auth failed, fall back to password
-            if not auth_success:
-                logger.info("Falling back to password authentication")
-                password = os.getenv("SNOWFLAKE_PASSWORD")
+                # Fallback to password authentication
                 if password:
                     self.config["password"] = password
+                    logger.info("SELECTED AUTH: PASSWORD (fallback)")
+                    logger.info("Using password authentication as fallback")
                 else:
-                    logger.error("No password provided as fallback. Authentication will likely fail.")
-        else:
-            # Priority 2: Password authentication
-            password = os.getenv("SNOWFLAKE_PASSWORD")
-            if password:
-                self.config["password"] = password
-                logger.info("Using password authentication")
+                    logger.error("No password available for fallback. Authentication will fail.")
             else:
-                logger.error("No authentication method configured. Please provide either a private key or password.")
+                # Private key file exists, use key pair authentication
+                if private_key_passphrase is not None:
+                    logger.info("SELECTED AUTH: KEY PAIR WITH PASSPHRASE")
+                    logger.info(f"Key file: {private_key_file}")
+                else:
+                    logger.info("SELECTED AUTH: KEY PAIR WITHOUT PASSPHRASE")
+                    logger.info(f"Key file: {private_key_file}")
+                    # Ensure passphrase is None
+                    private_key_passphrase = None
+                
+                # Try to setup key pair authentication
+                auth_success = self._setup_key_pair_auth(private_key_file, private_key_passphrase)
+                
+                # If key pair auth failed for any reason, try password as fallback
+                if not auth_success:
+                    logger.warning("Failed to set up key pair authentication")
+                    
+                    # Only use password fallback if available
+                    if password:
+                        logger.info("FALLBACK AUTH: PASSWORD")
+                        logger.info("Using password authentication as fallback")
+                        self.config["password"] = password
+                    else:
+                        logger.error("No password available for fallback after key auth failure")
+                        logger.error("Authentication will likely fail")
+        
+        # Priority 2: Password authentication (if no key is available)
+        elif password:
+            self.config["password"] = password
+            logger.info("SELECTED AUTH: PASSWORD")
+            logger.info("Using password authentication (no key file configured)")
+        
+        # No authentication method available
+        else:
+            logger.error("NO AUTHENTICATION METHOD AVAILABLE")
+            logger.error("Please configure either a private key or password")
+        
+        # Log authentication configuration end
+        logger.info("=== AUTHENTICATION CONFIGURED ===")
         
         self.conn: Optional[snowflake.connector.SnowflakeConnection] = None
         
@@ -80,7 +117,7 @@ class SnowflakeConnection:
         
         Args:
             private_key_file (str): Path to private key file
-            passphrase (str, optional): Passphrase for the private key
+            passphrase (str, optional): Passphrase for the private key (NOT the Snowflake password)
             
         Returns:
             bool: True if key pair authentication was set up successfully, False otherwise
@@ -96,12 +133,25 @@ class SnowflakeConnection:
             
             logger.info(f"Loading private key from {private_key_file}")
             
-            # Use passphrase only if provided
-            p_key = load_pem_private_key(
-                private_key,
-                password=passphrase.encode() if passphrase else None,
-                backend=default_backend()
-            )
+            # Only pass passphrase if it's not None and not empty
+            if passphrase is not None and passphrase.strip() != "":
+                logger.info("Using passphrase to decrypt private key")
+                p_key = load_pem_private_key(
+                    private_key,
+                    password=passphrase.encode(),
+                    backend=default_backend()
+                )
+                # Add passphrase to config for encrypted keys
+                self.config["private_key_passphrase"] = passphrase
+                logger.info("Private key with passphrase loaded successfully")
+            else:
+                logger.info("Using private key without passphrase")
+                p_key = load_pem_private_key(
+                    private_key,
+                    password=None,
+                    backend=default_backend()
+                )
+                logger.info("Private key without passphrase loaded successfully")
             
             # Convert key to DER format
             from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
@@ -111,14 +161,9 @@ class SnowflakeConnection:
                 encryption_algorithm=NoEncryption()
             )
             
-            # Add to config (this is what Snowflake expects)
+            # Add private key to config (required for Snowflake key pair auth)
             self.config["private_key"] = pkb
-            
-            # If we had a passphrase, add it to config
-            if passphrase:
-                self.config["private_key_passphrase"] = passphrase
                 
-            logger.info("Private key loaded successfully")
             return True
                 
         except Exception as e:
@@ -134,13 +179,39 @@ class SnowflakeConnection:
             # Check if connection needs to be re-established
             if self.conn is None:
                 logger.info("Creating new Snowflake connection...")
+                
+                # Determine the auth method we're actually using
+                auth_method = "UNKNOWN"
+                if "private_key" in self.config:
+                    auth_method = "KEY_PAIR"
+                    if "private_key_passphrase" in self.config and self.config.get("private_key_passphrase") is not None:
+                        auth_method += "_WITH_PASSPHRASE"
+                    else:
+                        auth_method += "_WITHOUT_PASSPHRASE"
+                elif "password" in self.config:
+                    auth_method = "PASSWORD"
+                
+                logger.info(f"Connecting with authentication method: {auth_method}")
+                
+                # Attempt connection
                 self.conn = snowflake.connector.connect(
                     **self.config,
                     client_session_keep_alive=True,
                     network_timeout=15,
                     login_timeout=15
                 )
+                
                 self.conn.cursor().execute("ALTER SESSION SET TIMEZONE = 'UTC'")
+                
+                # Log successful connection details
+                logger.info(f"=== CONNECTION ESTABLISHED ===")
+                logger.info(f"Authentication Method: {auth_method}")
+                logger.info(f"Connected to: {self.config['account']}")
+                logger.info(f"User: {self.config['user']}")
+                logger.info(f"Database: {self.config['database']}")
+                logger.info(f"Warehouse: {self.config['warehouse']}")
+                logger.info(f"==============================")
+                
                 logger.info("New connection established and configured")
             
             # Test if connection is valid
