@@ -164,6 +164,8 @@ The server provides automatic connection management features:
 
 ## Usage
 
+### Standard Usage
+
 The server will start automatically when configured with your MCP client. No manual startup is required in normal operation. Once the server is running, your MCP client will be able to execute Snowflake queries.
 
 For development testing, you can start the server manually using:
@@ -173,6 +175,70 @@ python server.py
 ```
 
 Note: Manual server startup is not needed for normal use. The MCP client will typically manage server startup and shutdown based on the configuration.
+
+### Docker Usage
+
+You can also run the server using Docker. This method is recommended for production environments and ensures consistent execution across different platforms.
+
+1. Build the Docker image:
+```bash
+docker build -t snowflake-mcp .
+```
+
+2. Configure your MCP client to use Docker. Example configuration:
+```json
+{
+  "mcpServers": {
+    "Snowflake-Docker": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "snowflake-mcp"
+      ],
+      "env": {
+        "SNOWFLAKE_USER": "your_username",
+        "SNOWFLAKE_ACCOUNT": "your_account",
+        "SNOWFLAKE_DATABASE": "your_database",
+        "SNOWFLAKE_WAREHOUSE": "your_warehouse",
+        "SNOWFLAKE_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+Note: The Docker implementation uses stdio for communication, so no ports need to be exposed.
+
+If using key pair authentication with Docker, you'll need to mount your private key file:
+```bash
+docker run -i -v /path/to/your/key.p8:/app/rsa_key.p8:ro snowflake-mcp
+```
+
+And update your configuration accordingly:
+```json
+{
+  "mcpServers": {
+    "Snowflake-Docker": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "-v",
+        "/path/to/your/key.p8:/app/rsa_key.p8:ro",
+        "snowflake-mcp"
+      ],
+      "env": {
+        "SNOWFLAKE_USER": "your_username",
+        "SNOWFLAKE_ACCOUNT": "your_account",
+        "SNOWFLAKE_DATABASE": "your_database",
+        "SNOWFLAKE_WAREHOUSE": "your_warehouse",
+        "SNOWFLAKE_PRIVATE_KEY_FILE": "/app/rsa_key.p8"
+      }
+    }
+  }
+}
+```
 
 ## Features
 
