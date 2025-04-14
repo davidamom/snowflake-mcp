@@ -189,7 +189,7 @@ docker build -t snowflake-mcp .
 ```json
 {
   "mcpServers": {
-    "Snowflake-Docker": {
+    "snowflake-docker": {
       "command": "docker",
       "args": [
         "run",
