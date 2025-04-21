@@ -226,6 +226,9 @@ And update your configuration accordingly:
         "-i",
         "-v",
         "/path/to/your/key.p8:/app/rsa_key.p8:ro",
+        //optional
+        "-v",
+        "/path/to/export/dir/:/export/"
         "snowflake-mcp"
       ],
       "env": {
@@ -282,6 +285,10 @@ The server exposes the following tool to MCP clients:
 - **execute_query** - Executes a SQL query on Snowflake and returns the results
   - Input: SQL query string
   - Output: Query results in a structured format
+
+- **export_to_csv** - Executes a SQL query on Snowflake and returns the results
+  - Input: SQL query string
+  - Output: Num rows exported. File path of the output file
 
 This implementation follows best practices for both MCP protocol implementation and Snowflake database interaction.
 

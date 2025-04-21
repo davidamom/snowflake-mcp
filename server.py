@@ -11,6 +11,7 @@ from mcp.server import Server
 from mcp.types import Tool, ServerResult, TextContent
 from contextlib import closing
 from typing import Optional, Any, List, Dict
+import pandas as pd
 
 # Configure logging
 logging.basicConfig(
@@ -21,6 +22,20 @@ logger = logging.getLogger('snowflake_mcp')
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Define the allowed base path for CSV exports, defaulting to /export
+# This directory MUST be mounted as a volume in Docker.
+EXPORT_BASE_PATH = os.getenv("EXPORT_BASE_PATH", "/export")
+if not os.path.exists(EXPORT_BASE_PATH):
+    try:
+        os.makedirs(EXPORT_BASE_PATH)
+        logger.info(f"Created export directory: {EXPORT_BASE_PATH}")
+    except OSError as e:
+        logger.error(f"Failed to create export directory {EXPORT_BASE_PATH}: {e}. CSV exports will likely fail.")
+elif not os.path.isdir(EXPORT_BASE_PATH):
+    logger.error(f"Configured EXPORT_BASE_PATH '{EXPORT_BASE_PATH}' exists but is not a directory. CSV exports will likely fail.")
+else:
+    logger.info(f"Using export base path: {EXPORT_BASE_PATH}")
 
 class SnowflakeConnection:
     """
@@ -110,6 +125,12 @@ class SnowflakeConnection:
         safe_config = {k: v for k, v in self.config.items() 
                       if k not in ['password', 'private_key', 'private_key_passphrase']}
         logger.info(f"Initialized with config: {json.dumps(safe_config)}")
+        # Store the base path for exports
+        self.export_base_path = EXPORT_BASE_PATH
+        if not self.export_base_path:
+             logger.warning("EXPORT_BASE_PATH is not set. CSV export functionality might be limited or fail.")
+        elif not os.path.isdir(self.export_base_path):
+             logger.warning(f"Export base path '{self.export_base_path}' is not a valid directory. CSV exports might fail.")
     
     def _setup_key_pair_auth(self, private_key_file: str, passphrase: str = None) -> bool:
         """
@@ -274,6 +295,107 @@ class SnowflakeConnection:
             logger.error(f"Error type: {type(e).__name__}")
             raise
 
+    def export_to_csv(self, query: str, relative_file_path: str) -> Dict[str, Any]:
+        """
+        Execute SQL query and export results to a CSV file within the configured base path.
+
+        Args:
+            query (str): SQL query statement.
+            relative_file_path (str): The relative path and filename for the CSV file (e.g., 'my_report.csv' or 'subdir/data.csv').
+                                      This will be joined with the EXPORT_BASE_PATH.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the full path to the exported file and the number of rows exported.
+
+        Raises:
+            ValueError: If the relative_file_path attempts to escape the export base path or is invalid.
+            FileNotFoundError: If the export base path does not exist or is not a directory.
+            Exception: Propagates exceptions from database query or file writing.
+        """
+        start_time = time.time()
+        logger.info(f"Exporting query to CSV: {query[:200]}...")
+        logger.info(f"Target relative path: {relative_file_path}")
+
+        if not self.export_base_path or not os.path.isdir(self.export_base_path):
+             error_msg = f"Export base path '{self.export_base_path}' is not configured or not a valid directory."
+             logger.error(error_msg)
+             raise FileNotFoundError(error_msg)
+
+        # Prevent path traversal attacks and ensure the path is relative
+        if relative_file_path.startswith('/') or '..' in relative_file_path:
+            error_msg = f"Invalid relative file path: '{relative_file_path}'. Must not start with '/' or contain '..'."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Construct the full path safely
+        full_path = os.path.abspath(os.path.join(self.export_base_path, relative_file_path))
+
+        # Double-check it's still within the base path after resolving
+        if not full_path.startswith(os.path.abspath(self.export_base_path)):
+             error_msg = f"Resolved path '{full_path}' is outside the allowed export directory '{self.export_base_path}'."
+             logger.error(error_msg)
+             raise ValueError(error_msg)
+
+        # Ensure the target directory exists
+        target_dir = os.path.dirname(full_path)
+        if not os.path.exists(target_dir):
+            try:
+                os.makedirs(target_dir)
+                logger.info(f"Created directory for export: {target_dir}")
+            except OSError as e:
+                logger.error(f"Failed to create directory {target_dir}: {e}")
+                raise
+
+        logger.info(f"Full export path: {full_path}")
+
+        try:
+            conn = self.ensure_connection()
+            with conn.cursor() as cursor:
+                # Execute the query (read operations only for export)
+                 if any(query.strip().upper().startswith(word) for word in ['INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER']):
+                     raise ValueError("Only SELECT queries can be exported to CSV.")
+
+                 cursor.execute(query)
+
+                 if cursor.description:
+                    # Fetch data using pandas for efficient CSV writing
+                    df = cursor.fetch_pandas_all()
+                    row_count = len(df)
+
+                    # Write DataFrame to CSV
+                    df.to_csv(full_path, index=False)
+
+                    execution_time = time.time() - start_time
+                    logger.info(f"Exported {row_count} rows to '{full_path}' in {execution_time:.2f}s")
+                    return {
+                        "message": f"Successfully exported {row_count} rows.",
+                        "file_path": full_path, # Return the full path on the server's filesystem
+                        "rows_exported": row_count
+                    }
+                 else:
+                    # Handle queries that return no description (e.g., USE DATABASE)
+                    logger.info("Query did not return results to export.")
+                    # Create an empty file or return specific message? Let's return 0 rows.
+                    # Create an empty file to signify the query ran but had no output columns/rows
+                    pd.DataFrame().to_csv(full_path, index=False)
+                    execution_time = time.time() - start_time
+                    logger.info(f"Exported 0 rows (query returned no data/columns) to '{full_path}' in {execution_time:.2f}s")
+
+                    return {
+                        "message": "Query executed but returned no data/columns to export.",
+                        "file_path": full_path,
+                        "rows_exported": 0
+                    }
+
+        except snowflake.connector.errors.ProgrammingError as e:
+            logger.error(f"SQL Error during export: {str(e)}")
+            logger.error(f"Error Code: {getattr(e, 'errno', 'unknown')}")
+            raise
+        except Exception as e:
+            logger.error(f"Error during CSV export: {str(e)}")
+            logger.error(f"Error type: {type(e).__name__}")
+            raise
+
     def close(self):
         """
         Close database connection
@@ -304,16 +426,34 @@ class SnowflakeMCPServer(Server):
             return [
                 Tool(
                     name="execute_query",
-                    description="Execute a SQL query on Snowflake",
+                    description="Execute a SQL query on Snowflake and return results directly.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "SQL query to execute"
+                                "description": "SQL query to execute (SELECT, INSERT, UPDATE, etc.)."
                             }
                         },
                         "required": ["query"]
+                    }
+                ),
+                Tool( # Add the new tool definition
+                    name="export_query_to_csv",
+                    description=f"Execute a SELECT SQL query on Snowflake and export the results to a CSV file within the designated export directory ('{EXPORT_BASE_PATH}' on the server).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "SELECT SQL query to execute."
+                            },
+                            "relative_file_path": {
+                                "type": "string",
+                                "description": f"The relative path and filename for the CSV file (e.g., 'my_data.csv' or 'reports/quarterly.csv'). This will be saved relative to the server's base export path: {EXPORT_BASE_PATH}. Do not use '..' or start with '/'."
+                            }
+                        },
+                        "required": ["query", "relative_file_path"]
                     }
                 )
             ]
@@ -342,6 +482,29 @@ class SnowflakeMCPServer(Server):
                     )]
                 except Exception as e:
                     error_message = f"Error executing query: {str(e)}"
+                    logger.error(error_message)
+                    return [TextContent(
+                        type="text",
+                        text=error_message
+                    )]
+            elif name == "export_query_to_csv": # Handle the new tool call
+                start_time = time.time()
+                try:
+                    query = arguments["query"]
+                    relative_path = arguments["relative_file_path"]
+                    result = self.db.export_to_csv(query, relative_path)
+                    execution_time = time.time() - start_time
+
+                    return [TextContent(
+                        type="text",
+                        text=f"Export successful (execution time: {execution_time:.2f}s):\n{json.dumps(result, indent=2)}"
+                    )]
+                except (ValueError, FileNotFoundError) as e: # Catch specific configuration/path errors
+                     error_message = f"Error preparing export: {str(e)}"
+                     logger.error(error_message)
+                     return [TextContent(type="text", text=error_message)]
+                except Exception as e: # Catch database or file writing errors
+                    error_message = f"Error exporting query to CSV: {str(e)}"
                     logger.error(error_message)
                     return [TextContent(
                         type="text",
