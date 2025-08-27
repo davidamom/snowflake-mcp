@@ -8,8 +8,7 @@ import snowflake.connector
 from dotenv import load_dotenv
 import mcp.server.stdio
 from mcp.server import Server
-from mcp.types import Tool, ServerResult, TextContent
-from contextlib import closing
+from mcp.types import Tool, TextContent
 from typing import Optional, Any, List, Dict
 import pandas as pd
 
@@ -48,6 +47,7 @@ class SnowflakeConnection:
             "account": os.getenv("SNOWFLAKE_ACCOUNT"),
             "database": os.getenv("SNOWFLAKE_DATABASE"),
             "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
+            "role": os.getenv("SNOWFLAKE_ROLE"),
         }
         
         # Log authentication configuration start
