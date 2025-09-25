@@ -117,6 +117,7 @@ SNOWFLAKE_USER=your_username          # Your Snowflake username
 SNOWFLAKE_ACCOUNT=YourAccount.Region  # Example: MyOrg.US-WEST-2
 SNOWFLAKE_DATABASE=your_database      # Your database
 SNOWFLAKE_WAREHOUSE=your_warehouse    # Your warehouse
+SNOWFLAKE_ROLE=your_role              # Your role
 
 # Authentication - Choose one method
 ```
@@ -201,7 +202,9 @@ docker build -t snowflake-mcp .
         "SNOWFLAKE_ACCOUNT": "your_account",
         "SNOWFLAKE_DATABASE": "your_database",
         "SNOWFLAKE_WAREHOUSE": "your_warehouse",
-        "SNOWFLAKE_PASSWORD": "your_password"
+        "SNOWFLAKE_PASSWORD": "your_password",
+        "SNOWFLAKE_ROLE": "your_role"
+        
       }
     }
   }
@@ -236,7 +239,9 @@ And update your configuration accordingly:
         "SNOWFLAKE_ACCOUNT": "your_account",
         "SNOWFLAKE_DATABASE": "your_database",
         "SNOWFLAKE_WAREHOUSE": "your_warehouse",
-        "SNOWFLAKE_PRIVATE_KEY_FILE": "/app/rsa_key.p8"
+        "SNOWFLAKE_ROLE": "your_role",
+        "SNOWFLAKE_PRIVATE_KEY_FILE": "path_for_your_private_key",
+        "SNOWFLAKE_PRIVATE_KEY_PASSPHRASE": "your_password_for_private_key"
       }
     }
   }
